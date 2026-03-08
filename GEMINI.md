@@ -2,26 +2,41 @@
 
 ## Project Overview
 
-This is a Flutter-based mobile application for farmers, named "Arqgene Farmer App". The application is designed to provide a localized experience with support for English, Hindi, and Tamil. It uses Firebase for phone number-based user authentication and Isar for local database storage. The core features appear to include user profile management and the ability to create listings, likely for agricultural products.
+This is a Flutter-based mobile application for farmers, named "Arqgene Farmer App". The application is designed to provide a localized experience with support for English, Hindi, and Tamil. It leverages Firebase for phone number-based user authentication and Isar for local database storage.
+
+### Key Features:
+*   **Authentication:** Secure phone number login via Firebase Authentication (OTP).
+*   **Clean Architecture:** The app follows Clean Architecture principles to ensure scalability and testability.
+*   **Voice Assistant:** Integrated AI Voice Assistant using the **Bhasini API** for speech-to-text (ASR) and translation, allowing farmers to navigate and perform actions using voice commands in their native language.
+*   **Listing Management:** Farmers can create product listings by taking photos or videos.
+*   **Localization:** Complete support for multiple languages (English, Hindi, Tamil).
 
 ### Key Technologies:
 
 *   **Framework:** Flutter
+*   **Architecture:** Clean Architecture (Domain, Data, Presentation layers)
+*   **State Management:** `Provider`
+*   **Dependency Injection:** `GetIt`
 *   **Authentication:** Firebase Authentication (Phone OTP)
 *   **Local Database:** Isar
-*   **Localization:** `easy_localization` package with JSON translation files.
-*   **Location:** `geolocator` and `geocoding` for location services.
-*   **Image Handling:** `image_picker` for selecting images.
+*   **Voice AI:** Bhasini API (ASR + Translation)
+*   **Localization:** `easy_localization`
+*   **Location:** `geolocator` and `geocoding`
 
-### Architecture:
+### Architecture Structure:
 
-The project follows a standard Flutter application structure:
+The project is refactored into a feature-based Clean Architecture:
 
-*   `lib/main.dart`: The main entry point of the application. It handles the initial routing logic, directing users to the language selection screen on their first run, and then to the appropriate screen based on their authentication and profile completion status.
-*   `lib/auth_service.dart`: A dedicated service for handling all Firebase phone authentication logic, including sending and verifying OTPs.
-*   `lib/screens`: This directory holds all the UI screens of the application, such as `LoginScreen`, `HomeScreen`, `ProfileScreen`, and `CreateListingScreen`.
-*   `lib/db`: This directory contains the Isar database service (`isar_service.dart`) and the database schemas (`schemas.dart`), which defines the structure of the local data.
-*   `assets/translations`: This folder contains the JSON files for English, Hindi, and Tamil translations.
+*   `lib/core`: Shared utilities, constants (e.g., `BhasiniConfig`), and base classes (`UseCase`, `Failure`).
+*   `lib/features/auth`: Handles authentication logic.
+    *   `domain`: Entities (`UserEntity`), Repositories (`AuthRepository`), and UseCases.
+    *   `data`: Models (`UserModel`), Datasources (`AuthRemoteDataSource`), and Repository Implementations.
+    *   `presentation`: `AuthProvider`, Screens (`LoginScreen`), and Widgets.
+*   `lib/features/voice_assistant`: Handles voice interaction.
+    *   `services`: `VoiceRecorderService` (Record audio), `BhasiniApiService` (API calls), `CommandProcessor` (Intent mapping).
+*   `lib/screens`: Legacy screens being incrementally refactored (e.g., `HomeScreen`, `ProfileScreen`).
+*   `lib/db`: Isar database services and schemas.
+*   `lib/injection_container.dart`: Service locator setup.
 
 ## Building and Running
 
@@ -29,7 +44,8 @@ The project follows a standard Flutter application structure:
 
 *   Flutter SDK installed.
 *   An Android or iOS emulator/device.
-*   A `google-services.json` file for Android and a corresponding `GoogleService-Info.plist` for iOS for Firebase integration.
+*   A `google-services.json` file for Android and `GoogleService-Info.plist` for iOS.
+*   **Bhasini API Credentials:** You must configure your API keys in `lib/core/constants/bhasini_config.dart`.
 
 ### Commands:
 
@@ -43,19 +59,14 @@ The project follows a standard Flutter application structure:
     flutter run
     ```
 
-*   **Build the app:**
-    *   **Android:**
-        ```bash
-        flutter build apk --release
-        ```
-    *   **iOS:**
-        ```bash
-        flutter build ios --release
-        ```
+*   **Generate Code (for Isar/Freezed/JsonSerializable):**
+    ```bash
+    flutter pub run build_runner build --delete-conflicting-outputs
+    ```
 
 ## Development Conventions
 
-*   **State Management:** The project appears to use a combination of `StatefulWidget` and `StreamBuilder` for managing state, particularly for handling authentication state changes. `SharedPreferences` is used for storing simple key-value data like `isFirstRun` and `isProfileCompleted`.
-*   **Localization:** The `easy_localization` package is used for internationalization. All strings should be added to the JSON files in `assets/translations` and accessed using the `tr()` extension method.
-*   **Database:** Isar is used for the local database. The database schema is defined in `lib/db/schemas.dart`. Any changes to the schema will require running the build runner to generate the necessary code: `flutter pub run build_runner build`.
-*   **Styling:** The app uses Material Design, with the primary theme color set to green.
+*   **State Management:** Use `Provider` for view models/controllers. Logic should reside in the Domain layer (UseCases) or Presentation Providers, not in the UI widgets.
+*   **Dependency Injection:** Always register new services and repositories in `lib/injection_container.dart`.
+*   **Voice Integration:** To add new voice commands, update `CommandProcessor` in `lib/features/voice_assistant/services/command_processor.dart`.
+*   **Localization:** Add new strings to `assets/translations` JSON files and use `tr()`.

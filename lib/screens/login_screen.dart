@@ -1,11 +1,15 @@
+import 'package:arqgene_farmer_app/screens/seller_auth_wrapper.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:pinput/pinput.dart';
 import 'package:provider/provider.dart';
 import '../features/auth/presentation/providers/auth_provider.dart';
-import 'home_screen.dart';
+import '../core/widgets/app_background.dart';
 
 class LoginScreen extends StatefulWidget {
+  final bool isSeller;
+  const LoginScreen({super.key, this.isSeller = false});
+
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
@@ -17,24 +21,18 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Reset provider state when screen initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().reset();
     });
   }
 
-  // 1. Send OTP Logic
   void _sendOtp() async {
     if (_phoneController.text.length < 10) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("invalid_phone".tr())));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("invalid_phone".tr())));
       return;
     }
 
-    // Add country code (Hardcoded to +91 for India, change as needed)
-    String number = "+91" + _phoneController.text.trim();
-
+    String number = "+91${_phoneController.text.trim()}";
     final authProvider = context.read<AuthProvider>();
     await authProvider.verifyPhoneNumber(number);
 
@@ -42,16 +40,14 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.red,
-          content: Text("Failed: ${authProvider.errorMessage}"),
+          content: Text("Failed to send OTP: ${authProvider.errorMessage}"),
         ),
       );
     }
   }
 
-  // 2. Verify OTP Logic
   void _verifyOtp() async {
     String otp = _otpController.text.trim();
-
     if (otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Please enter a full 6-digit code")),
@@ -67,13 +63,16 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red,
-            content: Text("Error: ${authProvider.errorMessage}"),
+            content: Text("Error verifying OTP: ${authProvider.errorMessage}"),
           ),
         );
       } else {
-         // Success is handled by AuthWrapper listening to authStateChanges
-         // But we can manually navigate if needed, or just let the stream do it.
-         // Since we are in AuthWrapper, it will rebuild and switch to HomeScreen/ProfileScreen.
+         if (widget.isSeller) {
+           Navigator.pushReplacement(
+             context,
+             MaterialPageRoute(builder: (context) => const SellerAuthWrapper()),
+           );
+         }
       }
     }
   }
@@ -85,113 +84,104 @@ class _LoginScreenState extends State<LoginScreen> {
         bool isOtpSent = authProvider.verificationId != null;
         bool isLoading = authProvider.isLoading;
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text("app_title").tr(),
-            centerTitle: true,
-            backgroundColor: Colors.green,
-          ),
-          body: Container(
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/background.jpg'),
-                fit: BoxFit.cover,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // STEP 1: PHONE INPUT
-                  if (!isOtpSent) ...[
-                    Text(
-                      "welcome_title".tr(),
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 10),
-                    Text("enter_mobile_instruction".tr()),
-                    SizedBox(height: 30),
-
-                    TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      maxLength: 10,
-                      decoration: InputDecoration(
-                        prefixText: "+91 ",
-                        labelText: "phone_label".tr(),
-                        border: OutlineInputBorder(),
-                        counterText: "",
-                      ),
-                    ),
-                    SizedBox(height: 20),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : _sendOtp,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                        ),
-                        child: isLoading
-                            ? CircularProgressIndicator(color: Colors.white)
-                            : Text("get_otp".tr(), style: TextStyle(fontSize: 18)),
-                      ),
-                    ),
-                  ]
-                  // STEP 2: OTP INPUT
-                  else ...[
-                    Text(
-                      "verify_phone_title".tr(),
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 10),
-                    Text("enter_code_instruction".tr()),
-                    SizedBox(height: 30),
-
-                    Pinput(
-                      length: 6,
-                      controller: _otpController, // Bind controller
-                      defaultPinTheme: PinTheme(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.green),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(height: 30),
-
-                    // THE VERIFY BUTTON
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : _verifyOtp,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                        ),
-                        child: isLoading
-                            ? CircularProgressIndicator(color: Colors.white)
-                            : Text(
-                                "verify_proceed".tr(),
-                                style: TextStyle(fontSize: 18),
+        return AppBackground(
+          title: "app_title".tr(),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Center(
+              child: SingleChildScrollView(
+                child: Card(
+                  color: Colors.white.withOpacity(0.9),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!isOtpSent) ...[
+                          Text(
+                            "welcome_title".tr(),
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 10),
+                          Text("enter_mobile_instruction".tr()),
+                          const SizedBox(height: 30),
+                          TextField(
+                            controller: _phoneController,
+                            keyboardType: TextInputType.phone,
+                            maxLength: 10,
+                            decoration: InputDecoration(
+                              prefixText: "+91 ",
+                              labelText: "phone_label".tr(),
+                              border: const OutlineInputBorder(),
+                              counterText: "",
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: isLoading ? null : _sendOtp,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
                               ),
-                      ),
+                              child: isLoading
+                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  : Text("get_otp".tr(), style: const TextStyle(fontSize: 18)),
+                            ),
+                          ),
+                        ] else ...[
+                          Text(
+                            "verify_phone_title".tr(),
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 10),
+                          Text("enter_code_instruction".tr()),
+                          const SizedBox(height: 30),
+                          Pinput(
+                            length: 6,
+                            controller: _otpController,
+                            defaultPinTheme: PinTheme(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.green),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: isLoading ? null : _verifyOtp,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: isLoading
+                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  : Text(
+                                      "verify_proceed".tr(),
+                                      style: const TextStyle(fontSize: 18),
+                                    ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              authProvider.reset();
+                              _otpController.clear();
+                            },
+                            child: Text("change_phone".tr()),
+                          ),
+                        ],
+                      ],
                     ),
-
-                    TextButton(
-                      onPressed: () {
-                        authProvider.reset();
-                        _otpController.clear();
-                      },
-                      child: Text("change_phone".tr()),
-                    ),
-                  ],
-                ],
+                  ),
+                ),
               ),
             ),
           ),

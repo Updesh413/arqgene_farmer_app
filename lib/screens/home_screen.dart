@@ -1,109 +1,19 @@
-// import 'package:arqgene_farmer_app/screens/language_screen.dart';
-// import 'package:arqgene_farmer_app/screens/profile_screen.dart';
-// import 'package:easy_localization/easy_localization.dart';
-// import 'package:flutter/material.dart';
-// import 'package:firebase_auth/firebase_auth.dart'; // Required for logout
-
-// class HomeScreen extends StatefulWidget {
-//   const HomeScreen({super.key});
-
-//   @override
-//   State<HomeScreen> createState() => _HomeScreenState();
-// }
-
-// class _HomeScreenState extends State<HomeScreen> {
-//   // Function to handle logout
-//   void _signOut() async {
-//     await FirebaseAuth.instance.signOut();
-//     // The StreamBuilder in main.dart handles the navigation automatically
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       // 1. Add AppBar so the user can sign out
-//       appBar: AppBar(
-//         title: const Text("home_title").tr(),
-//         backgroundColor: Colors.green, // Match your theme
-//         actions: [
-//           IconButton(
-//             icon: const Icon(Icons.person),
-//             tooltip: "profile".tr(),
-//             onPressed: () {
-//               Navigator.push(
-//                 context,
-//                 MaterialPageRoute<void>(builder: (context) => ProfileScreen()),
-//               );
-//             },
-//           ),
-//           IconButton(
-//             icon: const Icon(Icons.settings),
-//             tooltip: "settings".tr(),
-//             onPressed: () {
-//               Navigator.push(
-//                 context,
-//                 MaterialPageRoute<void>(builder: (context) => LanguageScreen()),
-//               );
-//             },
-//           ),
-//           IconButton(
-//             icon: const Icon(Icons.logout),
-//             tooltip: "logout".tr(),
-//             onPressed: _signOut,
-//           ),
-//         ],
-//       ),
-
-//       body: Container(
-//         decoration: const BoxDecoration(
-//           image: DecorationImage(
-//             image: AssetImage('assets/background.jpg'),
-//             fit: BoxFit.cover,
-//           ),
-//         ),
-//         child: SafeArea(
-//           child: Center(
-//             child: Column(
-//               mainAxisAlignment: MainAxisAlignment.center,
-//               children: [
-//                 const Icon(Icons.agriculture, size: 80, color: Colors.white),
-//                 const SizedBox(height: 20),
-//                 Text(
-//                   "welcome_title".tr(),
-//                   style: const TextStyle(
-//                     fontSize: 28,
-//                     fontWeight: FontWeight.bold,
-//                     color:
-//                         Colors.white, // White text to stand out on background
-//                     shadows: [
-//                       Shadow(
-//                         offset: Offset(1, 1),
-//                         blurRadius: 3,
-//                         color: Colors.black,
-//                       ),
-//                     ],
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
-
-import 'package:arqgene_farmer_app/db/isar_service.dart';
-import 'package:arqgene_farmer_app/db/schemas.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import '../features/auth/presentation/providers/auth_provider.dart';
+import '../features/listing/domain/entities/listing_entity.dart';
+import '../features/listing/presentation/providers/listing_provider.dart';
+import '../features/voice_assistant/services/voice_assistant_service.dart';
+import '../features/voice_assistant/services/command_processor.dart';
+import '../core/widgets/app_background.dart';
 import 'create_listing_screen.dart';
-import 'language_screen.dart';
 import 'profile_screen.dart';
+import 'video_player_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -112,16 +22,43 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final ImagePicker _picker = ImagePicker();
-  final IsarService _isarService = IsarService();
+  final VoiceAssistantService _voiceService = VoiceAssistantService();
+  final CommandProcessor _commandProcessor = CommandProcessor();
+  bool _isRecording = false;
+  bool _isProcessing = false;
+  bool _isSeller = false;
 
-  // 1. Capture Logic
+  @override
+  void initState() {
+    super.initState();
+    _checkSellerStatus();
+  }
+
+  Future<void> _checkSellerStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.phoneNumber != null) {
+      final sellerDoc = await FirebaseFirestore.instance
+          .collection('sellers')
+          .where('mobile', isEqualTo: user.phoneNumber)
+          .where('status', isEqualTo: 'approved')
+          .limit(1)
+          .get();
+      if (sellerDoc.docs.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _isSeller = true;
+          });
+        }
+      }
+    }
+  }
+
   Future<void> _captureMedia(ImageSource source, String type) async {
     final XFile? media = type == 'image'
         ? await _picker.pickImage(source: source)
         : await _picker.pickVideo(source: source);
 
     if (media != null) {
-      // Navigate to the Details Form
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -134,116 +71,264 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _signOut() async {
     await context.read<AuthProvider>().signOut();
-    // The StreamBuilder in main.dart handles the navigation automatically
+  }
+
+  Future<void> _handleVoiceButton() async {
+    if (_isRecording) {
+      setState(() {
+        _isRecording = false;
+        _isProcessing = true;
+      });
+      await _voiceService.stop();
+      setState(() => _isProcessing = false);
+    } else {
+      setState(() => _isRecording = true);
+      final String langCode = context.locale.languageCode;
+      await _voiceService.listen(
+        languageCode: langCode == 'hi'
+            ? 'hi-IN'
+            : (langCode == 'ta' ? 'ta-IN' : 'en-IN'),
+        onResult: (result) async {
+          setState(() {
+            _isRecording = false;
+            _isProcessing = true;
+          });
+          final response = _commandProcessor.process(result, langCode);
+          await _voiceService.speak(
+            response.feedback,
+            langCode == 'hi' ? 'hi-IN' : (langCode == 'ta' ? 'ta-IN' : 'en-US'),
+          );
+          setState(() => _isProcessing = false);
+          _executeAction(response.action);
+        },
+      );
+    }
+  }
+
+  void _executeAction(VoiceAction action) {
+    switch (action) {
+      case VoiceAction.sellByPhoto:
+        _captureMedia(ImageSource.camera, 'image');
+        break;
+      case VoiceAction.sellByVideo:
+        _captureMedia(ImageSource.camera, 'video');
+        break;
+      case VoiceAction.openProfile:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProfileScreen(isSellerProfile: _isSeller)),
+        );
+        break;
+      case VoiceAction.logout:
+        _signOut();
+        break;
+      case VoiceAction.unknown:
+        _showSnack("Unknown command");
+        break;
+      case VoiceAction.openSettings:
+      case VoiceAction.changeLanguage:
+        _showSnack("Action not implemented yet");
+        break;
+    }
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _viewMedia(ListingEntity item) {
+    if (item.mediaType == 'image') {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(10),
+          child: Stack(
+            alignment: Alignment.topRight,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: Image.file(
+                  File(item.mediaPath),
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(20),
+                    child: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error, color: Colors.red, size: 50),
+                        SizedBox(height: 10),
+                        Text("Could not load image file from local storage."),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VideoPlayerScreen(filePath: item.mediaPath),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("home_title").tr(),
-        backgroundColor: Colors.green, // Match your theme
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person),
-            tooltip: "profile".tr(),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute<void>(builder: (context) => ProfileScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: "settings".tr(),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute<void>(builder: (context) => LanguageScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: "logout".tr(),
-            onPressed: _signOut,
-          ),
-        ],
-      ),
-      body: Column(
+    return AppBackground(
+      title: "home_title".tr(),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.person),
+          tooltip: "profile".tr(),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute<void>(builder: (context) => ProfileScreen(isSellerProfile: _isSeller)),
+            );
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.logout),
+          tooltip: "logout".tr(),
+          onPressed: _signOut,
+        ),
+      ],
+      child: Stack(
         children: [
-          // TOP SECTION: ACTION BUTTONS
-          Container(
-            padding: EdgeInsets.all(20),
-            color: Colors.green[50],
-            child: Row(
-              children: [
-                // Button 1: Take Photo
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.camera_alt,
-                    label: "Sell by\nPhoto",
-                    color: Colors.orange,
-                    onTap: () => _captureMedia(ImageSource.camera, 'image'),
-                  ),
-                ),
-                SizedBox(width: 15),
-                // Button 2: Record Video
-                Expanded(
-                  child: _buildActionButton(
-                    icon: Icons.videocam,
-                    label: "Sell by\nVideo",
-                    color: Colors.blue,
-                    onTap: () => _captureMedia(ImageSource.camera, 'video'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Divider(height: 1),
-
-          // BOTTOM SECTION: LIST OF UPLOADS
-          Expanded(
-            child: StreamBuilder<List<CropListing>>(
-              stream: _isarService.getAllListings(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Center(child: Text("No crops listed yet."));
-                }
-
-                final listings = snapshot.data!;
-                return ListView.builder(
-                  itemCount: listings.length,
-                  itemBuilder: (context, index) {
-                    final item = listings[index];
-                    return Card(
-                      margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      child: ListTile(
-                        leading: Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.grey[300],
-                          // Display thumbnail if image
-                          child: item.mediaType == 'image'
-                              ? Image.file(
-                                  File(item.mediaPath),
-                                  fit: BoxFit.cover,
-                                )
-                              : Icon(Icons.play_circle_fill),
-                        ),
-                        title: Text("₹ ${item.price}"),
-                        subtitle: Text(item.description ?? "No description"),
-                        trailing: Icon(
-                          Icons.check_circle,
-                          color: Colors.grey,
-                        ), // 'Grey' means offline
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                color: Colors.white.withOpacity(0.2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionButton(
+                        icon: Icons.camera_alt,
+                        label: "Sell by\nPhoto",
+                        color: Colors.orange.withOpacity(0.9),
+                        onTap: () => _captureMedia(ImageSource.camera, 'image'),
                       ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: _buildActionButton(
+                        icon: Icons.videocam,
+                        label: "Sell by\nVideo",
+                        color: Colors.blue.withOpacity(0.9),
+                        onTap: () => _captureMedia(ImageSource.camera, 'video'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Consumer<ListingProvider>(
+                  builder: (context, listingProvider, child) {
+                    return StreamBuilder<List<ListingEntity>>(
+                      stream: listingProvider.listings,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator(color: Colors.white));
+                        }
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              "No crops listed yet.",
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          );
+                        }
+
+                        final listings = snapshot.data!;
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          itemCount: listings.length,
+                          itemBuilder: (context, index) {
+                            final item = listings[index];
+                            return Card(
+                              elevation: 3,
+                              color: Colors.white.withOpacity(0.9),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              child: ListTile(
+                                onTap: () => _viewMedia(item),
+                                leading: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    width: 60,
+                                    height: 60,
+                                    color: Colors.grey[300],
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        item.mediaType == 'image'
+                                            ? Image.file(
+                                                File(item.mediaPath),
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.image),
+                                              )
+                                            : const Icon(Icons.play_circle_fill, color: Colors.blue),
+                                        if (item.mediaType == 'video')
+                                          const Icon(Icons.play_arrow, color: Colors.white, size: 20),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                title: Text(
+                                  "₹ ${item.price ?? 0}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.description ?? "No description"),
+                                    if (item.address != null && item.address!.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        item.address!,
+                                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ]
+                                  ],
+                                ),
+                                trailing: TextButton(
+                                  onPressed: () => _viewMedia(item),
+                                  child: const Text("View"),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
                     );
                   },
-                );
-              },
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              onPressed: _isProcessing ? null : _handleVoiceButton,
+              backgroundColor: _isRecording ? Colors.red : Colors.green,
+              child: _isProcessing
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Icon(_isRecording ? Icons.stop : Icons.mic, color: Colors.white),
             ),
           ),
         ],
@@ -260,11 +345,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 120,
+        height: 100,
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(15),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
               blurRadius: 5,
               color: Colors.black26,
@@ -275,15 +360,15 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 40, color: Colors.white),
-            SizedBox(height: 10),
+            Icon(icon, size: 30, color: Colors.white),
+            const SizedBox(height: 8),
             Text(
               label,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontSize: 14,
               ),
             ),
           ],

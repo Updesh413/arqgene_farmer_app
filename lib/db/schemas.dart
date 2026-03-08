@@ -25,6 +25,7 @@ class CropListing {
 
   String? description;
   double? price;
+  String? address; // <-- Add address field
 
   late DateTime createdAt;
 
