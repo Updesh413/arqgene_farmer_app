@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
 import 'package:pinput/pinput.dart';
 import 'package:provider/provider.dart';
@@ -15,32 +17,30 @@ class CustomerRegistrationScreen extends StatefulWidget {
 
 class _CustomerRegistrationScreenState
     extends State<CustomerRegistrationScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
-  late String _selectedPaymentMethod;
-
-  final List<String> _paymentMethods = [
-    'UPI (Google Pay, PhonePe)',
-    'Cash on Delivery',
-    'Debit/Credit Card (Mock)',
-  ];
 
   @override
   void initState() {
     super.initState();
-    _selectedPaymentMethod = _paymentMethods[0];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().reset();
     });
   }
 
   void _sendOtp() async {
+    if (_nameController.text.isEmpty) {
+      _showSnack("Please enter your name");
+      return;
+    }
+    if (_addressController.text.isEmpty) {
+      _showSnack("Please enter your address");
+      return;
+    }
     if (_phoneController.text.length < 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter a valid 10-digit mobile number"),
-        ),
-      );
+      _showSnack("Please enter a valid 10-digit mobile number");
       return;
     }
 
@@ -49,21 +49,26 @@ class _CustomerRegistrationScreenState
     await authProvider.verifyPhoneNumber(number);
 
     if (mounted && authProvider.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text("Failed to send OTP: ${authProvider.errorMessage}"),
-        ),
+      _showSnack(
+        "Failed to send OTP: ${authProvider.errorMessage}",
+        isError: true,
       );
     }
+  }
+
+  void _showSnack(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red : null,
+      ),
+    );
   }
 
   void _verifyOtp() async {
     String otp = _otpController.text.trim();
     if (otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a full 6-digit code")),
-      );
+      _showSnack("Please enter a full 6-digit code");
       return;
     }
 
@@ -72,18 +77,35 @@ class _CustomerRegistrationScreenState
 
     if (mounted) {
       if (authProvider.errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text("Error: ${authProvider.errorMessage}"),
-          ),
-        );
+        _showSnack("Error: ${authProvider.errorMessage}", isError: true);
       } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const CustomerHomeScreen()),
-          (route) => false,
-        );
+        // Save customer details to Firestore
+        try {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            await FirebaseFirestore.instance
+                .collection('customers')
+                .doc(user.uid)
+                .set({
+                  'name': _nameController.text.trim(),
+                  'address': _addressController.text.trim(),
+                  'phone': user.phoneNumber,
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+          }
+
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const CustomerHomeScreen(),
+              ),
+              (route) => false,
+            );
+          }
+        } catch (e) {
+          _showSnack("Failed to save profile: $e", isError: true);
+        }
       }
     }
   }
@@ -127,49 +149,34 @@ class _CustomerRegistrationScreenState
                         const SizedBox(height: 30),
                         if (!isOtpSent) ...[
                           TextField(
+                            controller: _nameController,
+                            decoration: const InputDecoration(
+                              labelText: "Full Name",
+                              prefixIcon: Icon(Icons.person),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          TextField(
+                            controller: _addressController,
+                            maxLines: 2,
+                            decoration: const InputDecoration(
+                              labelText: "Delivery Address",
+                              prefixIcon: Icon(Icons.location_on),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          TextField(
                             controller: _phoneController,
                             keyboardType: TextInputType.phone,
                             maxLength: 10,
                             decoration: const InputDecoration(
                               labelText: "Mobile Number",
                               prefixText: "+91 ",
+                              prefixIcon: Icon(Icons.phone),
                               border: OutlineInputBorder(),
                               counterText: "",
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              "Preferred Payment Method:",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey),
-                              borderRadius: BorderRadius.circular(5),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _selectedPaymentMethod,
-                                isExpanded: true,
-                                items: _paymentMethods.map((String method) {
-                                  return DropdownMenuItem<String>(
-                                    value: method,
-                                    child: Text(method),
-                                  );
-                                }).toList(),
-                                onChanged: (String? newValue) {
-                                  if (newValue != null) {
-                                    setState(
-                                      () => _selectedPaymentMethod = newValue,
-                                    );
-                                  }
-                                },
-                              ),
                             ),
                           ),
                           const SizedBox(height: 30),

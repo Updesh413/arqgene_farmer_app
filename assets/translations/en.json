@@ -11,6 +11,7 @@
   "change_phone": "Change Phone Number",
   "invalid_otp": "Invalid OTP. Please try again.",
   "home_title": "My Farm",
+  "welcome_seller": "Hi, {}",
   "logout": "Logout",
   "profile_title": "Setup Profile",
   "name_label": "Your Name",

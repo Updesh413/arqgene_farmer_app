@@ -1,5 +1,6 @@
 import 'package:arqgene_farmer_app/features/listing/domain/entities/listing_entity.dart';
 import 'package:arqgene_farmer_app/features/listing/presentation/providers/listing_provider.dart';
+import 'package:arqgene_farmer_app/screens/customer_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
@@ -77,6 +78,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     return AppBackground(
       title: "Dr. Pasumai",
       actions: [
+        IconButton(
+          icon: const Icon(Icons.person),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CustomerProfileScreen()),
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.logout),
           onPressed: () async {
