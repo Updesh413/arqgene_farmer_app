@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:arqgene_farmer_app/screens/role_selection_screen.dart';
+import 'package:arqgene_farmer_app/screens/admin_login_screen.dart';
 import 'package:arqgene_farmer_app/core/widgets/app_background.dart';
+
+import 'admin_login_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -13,12 +15,19 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  Future<void> _updateSellerStatus(String docId, String status, {String? comment}) async {
+  Future<void> _updateSellerStatus(
+    String docId,
+    String status, {
+    String? comment,
+  }) async {
     final updateData = <String, dynamic>{'status': status};
     if (comment != null) {
       updateData['rejection_comment'] = comment;
     }
-    await FirebaseFirestore.instance.collection('sellers').doc(docId).update(updateData);
+    await FirebaseFirestore.instance
+        .collection('sellers')
+        .doc(docId)
+        .update(updateData);
   }
 
   void _showRejectDialog(String docId) {
@@ -41,7 +50,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             TextButton(
               onPressed: () {
                 if (commentController.text.isNotEmpty) {
-                  _updateSellerStatus(docId, 'rejected', comment: commentController.text);
+                  _updateSellerStatus(
+                    docId,
+                    'rejected',
+                    comment: commentController.text,
+                  );
                   Navigator.pop(context);
                 }
               },
@@ -63,7 +76,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           onPressed: () async {
             await FirebaseAuth.instance.signOut();
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+              MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
             );
           },
         ),
@@ -75,13 +88,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.white));
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
               child: Text(
                 'No pending approvals.',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             );
           }
@@ -94,7 +113,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 elevation: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 color: Colors.white.withOpacity(0.9),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -107,33 +128,67 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           Expanded(
                             child: Text(
                               seller['name'] ?? 'No Name',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const Divider(height: 20),
                       _buildDetailRow(Icons.phone, 'Mobile', seller['mobile']),
-                      _buildDetailRow(Icons.location_on, 'Address', seller['address']),
-                      _buildDetailRow(Icons.credit_card, 'Aadhaar', seller['adharNumber']),
-                      _buildDetailRow(Icons.restaurant, 'FSSAI', seller['fssaiNumber']),
-                      _buildDetailRow(Icons.category, 'Category', seller['category']),
+                      _buildDetailRow(
+                        Icons.location_on,
+                        'Address',
+                        seller['address'],
+                      ),
+                      _buildDetailRow(
+                        Icons.credit_card,
+                        'Aadhaar',
+                        seller['adharNumber'],
+                      ),
+                      _buildDetailRow(
+                        Icons.restaurant,
+                        'FSSAI',
+                        seller['fssaiNumber'],
+                      ),
+                      _buildDetailRow(
+                        Icons.category,
+                        'Category',
+                        seller['category'],
+                      ),
                       const SizedBox(height: 16),
                       const Text(
                         'Documents',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.green,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            _buildImageThumbnail('Aadhaar', seller['adharImage']),
+                            _buildImageThumbnail(
+                              'Aadhaar',
+                              seller['adharImage'],
+                            ),
                             _buildImageThumbnail('FSSAI', seller['fssaiImage']),
-                            _buildImageThumbnail('Organic', seller['organicCertification']),
-                            _buildImageThumbnail('Pesticide Free', seller['noPesticideCertificate']),
+                            _buildImageThumbnail(
+                              'Organic',
+                              seller['organicCertification'],
+                            ),
+                            _buildImageThumbnail(
+                              'Pesticide Free',
+                              seller['noPesticideCertificate'],
+                            ),
                             if (seller['landPhotos'] != null)
-                              ...((seller['landPhotos'] as List).map((photo) => _buildImageThumbnail('Land', photo))),
+                              ...((seller['landPhotos'] as List).map(
+                                (photo) => _buildImageThumbnail('Land', photo),
+                              )),
                           ],
                         ),
                       ),
@@ -146,11 +201,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green,
                                 foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
                               icon: const Icon(Icons.check),
                               label: const Text('Approve'),
-                              onPressed: () => _updateSellerStatus(doc.id, 'approved'),
+                              onPressed: () =>
+                                  _updateSellerStatus(doc.id, 'approved'),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -159,7 +217,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.red,
                                 foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
                               icon: const Icon(Icons.close),
                               label: const Text('Reject'),
@@ -195,8 +255,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildImageThumbnail(String label, String? base64String) {
-    if (base64String == null || base64String.isEmpty) return const SizedBox.shrink();
-    
+    if (base64String == null || base64String.isEmpty)
+      return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.only(right: 10.0),
       child: Column(
@@ -225,7 +286,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             AppBar(
               title: Text(label),
               automaticallyImplyLeading: false,
-              actions: [IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context))],
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -237,7 +303,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildDecodedImage(String base64String, double? width, double? height) {
+  Widget _buildDecodedImage(
+    String base64String,
+    double? width,
+    double? height,
+  ) {
     try {
       final decodedBytes = base64Decode(base64String);
       return Image.memory(

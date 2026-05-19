@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -65,4 +62,15 @@ class DefaultFirebaseOptions {
     storageBucket: 'fresherzon.firebasestorage.app',
     iosBundleId: 'com.UpdeshArqgene.FresherZon',
   );
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyCQlqqTH6bKgv-lcvX1HWpl7yVw5BmaD8g',
+    appId: '1:829359812676:web:538e6655dc4259bda18c11',
+    messagingSenderId: '829359812676',
+    projectId: 'fresherzon',
+    authDomain: 'fresherzon.firebaseapp.com',
+    storageBucket: 'fresherzon.firebasestorage.app',
+    measurementId: 'G-VRYL6QEPLS',
+  );
+
 }

@@ -34,20 +34,6 @@ class RoleSelectionScreen extends StatelessWidget {
               const SizedBox(height: 20),
               _buildRoleButton(
                 context,
-                'Admin',
-                'Log in to manage the application',
-                () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AdminLoginScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-              _buildRoleButton(
-                context,
                 'Customer',
                 'Register or log in to buy products',
                 () {

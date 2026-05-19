@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:829359812676:android:9a34272e66647e1ba18c11",
+        "mobilesdk_app_id": "1:829359812676:android:17c7a58f3e2b792ba18c11",
         "android_client_info": {
-          "package_name": "com.UpdeshArqgene.FresherZon"
+          "package_name": "com.UpdeshArqgene.FresherZonApp"
         }
       },
       "oauth_client": [],
